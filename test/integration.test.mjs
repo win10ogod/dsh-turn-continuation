@@ -9,6 +9,7 @@ import Projections from '@deepseek-ai/dsh-session-projection'
 import Prompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import Loop from '@deepseek-ai/dsh-agent-loop'
+import * as Todo from '@deepseek-ai/dsh-tool-todo'
 import * as continuation from '../lib/index.js'
 
 const text = value => ({ type: 'text', text: value })
@@ -18,6 +19,7 @@ async function fixture(t, script, options = {}) {
   const ctx = new Context()
   for (const plugin of [Sessions, Projections, Agents, Llm, Prompt, Tools]) await ctx.plugin(plugin)
   await ctx.plugin(Loop, {})
+  await ctx.plugin(Todo, { allowParallelInProgress: true })
   if (options.plugin !== false) await ctx.plugin(continuation, options.config || {})
   const requests = [], events = [], executions = []
   ctx.on('session/event', (_session, event) => events.push(event))
@@ -170,4 +172,43 @@ test('a later normal turn does not inherit continuation state', async t => {
   assert.equal(endings.length, 2)
   assert.equal(endings[1].data.reason.kind, 'completed')
   assert.equal(f.events.filter(e => e.type === 'user/message' && e.data.source.kind === 'turn-continuation').length, 1)
+})
+
+const todos = (id, status) => ({ type: 'tool-call', id: ToolCallId(id), name: 'todo_write', arguments: JSON.stringify({ todos: [{ content: 'Verify and deliver the artifact', status }] }) })
+
+test('observed premature stop pattern with pending todos completes in one turn', async t => {
+  const f = await fixture(t, [
+    { blocks: [todos('plan', 'in_progress')], reason: { kind: 'tool-calls' } },
+    { blocks: [{ type: 'reasoning', text: 'Next I need to validate the result.' }, text('\n\n')] },
+    { blocks: [text("Now I'll finalize and deliver the results.")] },
+    { blocks: [text('最後收尾：')] },
+    { blocks: [tool('verify')], reason: { kind: 'tool-calls' } },
+    { blocks: [todos('finish-plan', 'completed')], reason: { kind: 'tool-calls' } },
+    { blocks: [text('Verified artifact delivered.')] }
+  ])
+  assert.equal(f.requests.length, 7)
+  assert.equal(f.executions.length, 1)
+  assert.equal(f.events.filter(e => e.type === 'turn/start').length, 1)
+  assert.equal(f.events.filter(e => e.type === 'turn/end').length, 1)
+  assert.equal(f.events.filter(e => e.type === 'turn/end')[0].data.reason.kind, 'completed')
+  assert.equal(f.events.filter(e => e.type === 'user/message' && e.data.source.cause === 'unfinished-todos').length, 3)
+})
+
+test('a real blocker can yield unfinished todos and explain without looping', async t => {
+  const f = await fixture(t, [
+    { blocks: [todos('plan', 'pending')], reason: { kind: 'tool-calls' } },
+    { blocks: [text('Access is missing.')] },
+    { blocks: [{ type: 'tool-call', id: ToolCallId('yield'), name: 'continuation_yield', arguments: JSON.stringify({ reason: 'Required deployment credential is unavailable.' }) }], reason: { kind: 'tool-calls' } },
+    { blocks: [text('Please supply the missing deployment credential.')] }
+  ])
+  assert.equal(f.requests.length, 4)
+  assert.equal(f.events.filter(e => e.type === 'turn/start').length, 1)
+})
+
+test('unfinished-todo continuation can be disabled independently', async t => {
+  const f = await fixture(t, [
+    { blocks: [todos('plan', 'pending')], reason: { kind: 'tool-calls' } },
+    { blocks: [text('Next I will work.')] }
+  ], { config: { continueIncompleteTodos: false } })
+  assert.equal(f.requests.length, 2)
 })
