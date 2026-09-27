@@ -1,0 +1,28 @@
+name: Test DSH continuation
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.21.0'
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm check
+      - if: runner.os == 'Linux'
+        run: pnpm pack --pack-destination dist
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: dsh-turn-continuation-package
+          path: dist/*.tgz
