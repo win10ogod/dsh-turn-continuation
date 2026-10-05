@@ -1,6 +1,6 @@
 # dsh-turn-continuation
 
-DSH 在模型回報 `max-tokens`（單次輸出 token 上限），或待辦尚未完成卻回傳正常 `stop` 時，自動在**同一個回合**接續任務。支援並測試於 DeepSeek Harness `0.1.7-rc.2` 與 `0.2.0-rc.2`。
+DSH 在模型回報 `max-tokens`（單次輸出 token 上限），或待辦尚未完成卻回傳正常 `stop` 時，自動在**同一個回合**接續任務。支援並測試於 DeepSeek Harness `0.1.7-rc.2`、`0.2.0-rc.2` 與 `0.2.1-alpha.1`。
 
 插件監聽已提交的模型回應，在 `agent/turn-stopping` 階段用 `agent.steer()` 排入下一步。會話、回合編號、已生成文字、工具結果與工作區均延續使用。每次接續是新的模型請求，會產生相應用量；原有模型、每次請求的 `maxTokens`、工具權限和上下文管理設定保持原值。
 
