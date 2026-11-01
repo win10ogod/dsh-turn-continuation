@@ -8,6 +8,7 @@ import Sessions from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Prompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
+import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import Loop from '@deepseek-ai/dsh-agent-loop'
 import * as Todo from '@deepseek-ai/dsh-tool-todo'
 import * as continuation from '../lib/index.js'
@@ -17,7 +18,7 @@ const tool = (id, argumentsValue = '{}') => ({ type: 'tool-call', id: ToolCallId
 
 async function fixture(t, script, options = {}) {
   const ctx = new Context()
-  for (const plugin of [Sessions, Projections, Agents, Llm, Prompt, Tools]) await ctx.plugin(plugin)
+  for (const plugin of [Sessions, Projections, Agents, Llm, Prompt, Tools, NativeToolExecutor]) await ctx.plugin(plugin)
   await ctx.plugin(Loop, {})
   await ctx.plugin(Todo, { allowParallelInProgress: true })
   if (options.plugin !== false) await ctx.plugin(continuation, options.config || {})
